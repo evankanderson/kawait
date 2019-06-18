@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/knative/pkg/apis/duck"
 	"github.com/knative/pkg/apis/duck/v1alpha1"
@@ -11,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
-//	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	//	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
 
 var cmd = &cobra.Command{
@@ -19,28 +20,36 @@ var cmd = &cobra.Command{
 	Short: "Waits for Kubernetes resources to become ready",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("Awaiting %q\n", args)
-
+/*
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 		configOverrides := &clientcmd.ConfigOverrides{}
 		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+		
 		config, err := kubeConfig.ClientConfig()
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+		*/
+		config, err := clientcmd.BuildConfigFromFlags("", "c:\\users\\evank\\.kube\\config")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
 		dynamicClient, err := dynamic.NewForConfig(config)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
-//		finder := util.NewCRDFinder(util.CRDFromDynamic(dynamicClient))
+		//		finder := util.NewCRDFinder(util.CRDFromDynamic(dynamicClient))
 
 		tif := &duck.TypedInformerFactory{
 			Client: dynamicClient,
 			Type:   &v1alpha1.KResource{},
+			ResyncPeriod: 1 * time.Minute,
 		}
-		fmt.Printf("Got tif: %v\n", tif)
 
 		for _, item := range args {
 			gvr, name := ParseGVRAndName(item)
@@ -56,7 +65,9 @@ var cmd = &cobra.Command{
 			*/
 			fmt.Printf("Looking for %q, a %v", name, gvr)
 			_, lister, err := tif.Get(gvr)
+			fmt.Println("Got lister")
 			untyped, err := lister.Get(name)
+			fmt.Println("Read from lister")
 			if err != nil {
 				fmt.Printf("Failed to fetch %q (%q): %v\n", item, gvr, err)
 				continue
