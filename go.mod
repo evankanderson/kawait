@@ -43,6 +43,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.4.0 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/ugorji/go v1.1.5-pre // indirect
@@ -63,7 +64,7 @@ require (
 	k8s.io/apimachinery v0.0.0-20190612125636-6a5db36e93ad
 	k8s.io/cli-runtime v0.0.0-20190612131021-ced92c4c4749 // indirect
 	k8s.io/client-go v0.0.0-20190612125919-5c45477a8ae7
-	k8s.io/klog v0.3.2 // indirect
+	k8s.io/klog v0.3.2
 	k8s.io/kubernetes v1.14.3 // indirect
 	k8s.io/utils v0.0.0-20190529001817-6999998975a7 // indirect
 )
