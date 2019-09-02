@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -29,33 +29,7 @@ var cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("Awaiting %q\n", args)
 
-		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
-		
-		config, err := kubeConfig.ClientConfig()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		dynamicClient, err := dynamic.NewForConfig(config)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		discovery := memory.NewMemCacheClient(kubernetes.NewForConfigOrDie(config).Discovery())
-		apiResources, err := restmapper.GetAPIGroupResources(discovery)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		mapper := restmapper.NewDiscoveryRESTMapper(apiResources)
-
-		tif := &duck.TypedInformerFactory{
-			Client: dynamicClient,
-			Type:   &v1alpha1.KResource{},
-			ResyncPeriod: 1 * time.Minute,
-		}
+		tif, mapper := connectToServer()
 
 		for _, item := range args {
 			gvr, ns, name, err := ParseGVRAndName(item, mapper)
@@ -65,10 +39,10 @@ var cmd = &cobra.Command{
 			}
 			_, lister, err := tif.Get(gvr)
 			rc := &ReadyChecker{
-				GVR: gvr,
+				GVR:       gvr,
 				Namespace: ns,
-				Name: name,
-				Lister: lister,
+				Name:      name,
+				Lister:    lister,
 			}
 			fmt.Printf("%q is ready=%t\n", rc, rc.IsReady())
 		}
@@ -86,13 +60,45 @@ func main() {
 	}
 }
 
+func connectToServer() (*duck.TypedInformerFactory, meta.RESTMapper) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
+
+	config, err := kubeConfig.ClientConfig()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	discovery := memory.NewMemCacheClient(kubernetes.NewForConfigOrDie(config).Discovery())
+	apiResources, err := restmapper.GetAPIGroupResources(discovery)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(apiResources)
+
+	tif := &duck.TypedInformerFactory{
+		Client:       dynamicClient,
+		Type:         &v1alpha1.KResource{},
+		ResyncPeriod: 1 * time.Minute,
+	}
+
+	return tif, mapper
+}
+
 // ReadyChecker stores the information needed to determine if a Kubernetes
 // resource is ready or succeeded yet.
 type ReadyChecker struct {
-	GVR schema.GroupVersionResource
+	GVR       schema.GroupVersionResource
 	Namespace string
-	Name string
-	Lister cache.GenericLister
+	Name      string
+	Lister    cache.GenericLister
 }
 
 // String represents the resource that a ReadyChecker is watching as a string.
@@ -129,8 +135,8 @@ func (r *ReadyChecker) IsReady() bool {
 	return false
 }
 
-// ParseGVRAndName parses a string like "Deployments.extensions/v1beta1:foo" or
-// "Deployments.extensions/v1beta1:namespace/foo" and returns a GroupVersion,
+// ParseGVRAndName parses a string like "Deployments.extensions:foo" or
+// "Deployments.extensions:namespace/foo" and returns a GroupVersion,
 // namespace, and resource name.
 func ParseGVRAndName(s string, mapper meta.RESTMapper) (schema.GroupVersionResource, string, string, error) {
 	parts := strings.Split(s, ":")
@@ -138,7 +144,7 @@ func ParseGVRAndName(s string, mapper meta.RESTMapper) (schema.GroupVersionResou
 	namespace, name := "default", nsName
 	parts = strings.Split(nsName, "/")
 	if len(parts) > 1 {
-	namespace, name = parts[0], parts[1]
+		namespace, name = parts[0], parts[1]
 	}
 	gvr, err := determineREST(gvrName, mapper)
 	return gvr, namespace, name, err
@@ -149,6 +155,7 @@ func ParseGVRAndName(s string, mapper meta.RESTMapper) (schema.GroupVersionResou
 // k8s.io/cli-runtime/pkg/resource/builder.go
 func determineREST(resourceName string, mapper meta.RESTMapper) (schema.GroupVersionResource, error) {
 	fullGVR, groupResource := schema.ParseResourceArg(resourceName)
+
 	var gvk schema.GroupVersionKind
 	if fullGVR != nil {
 		gvk, _ = mapper.KindFor(*fullGVR)
