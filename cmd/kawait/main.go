@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/knative/pkg/apis/duck"
-	"github.com/knative/pkg/apis/duck/v1alpha1"
+	"github.com/evankanderson/kawait/internal/readychecker"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -18,9 +18,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/restmapper"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
+	"knative.dev/pkg/apis/duck"
+	"knative.dev/pkg/apis/duck/v1alpha1"
 )
 
 var cmd = &cobra.Command{
@@ -38,7 +39,7 @@ var cmd = &cobra.Command{
 				continue
 			}
 			_, lister, err := tif.Get(gvr)
-			rc := &ReadyChecker{
+			rc := &readychecker.ReadyChecker{
 				GVR:       gvr,
 				Namespace: ns,
 				Name:      name,
@@ -60,6 +61,8 @@ func main() {
 	}
 }
 
+// Connect to the Kubernetes apiserver and collects the types which
+// exist from the server's discovery endpoint.
 func connectToServer() (*duck.TypedInformerFactory, meta.RESTMapper) {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
@@ -90,49 +93,6 @@ func connectToServer() (*duck.TypedInformerFactory, meta.RESTMapper) {
 	}
 
 	return tif, mapper
-}
-
-// ReadyChecker stores the information needed to determine if a Kubernetes
-// resource is ready or succeeded yet.
-type ReadyChecker struct {
-	GVR       schema.GroupVersionResource
-	Namespace string
-	Name      string
-	Lister    cache.GenericLister
-}
-
-// String represents the resource that a ReadyChecker is watching as a string.
-func (r *ReadyChecker) String() string {
-	return fmt.Sprintf("%s/%s, a %s", r.Namespace, r.Name, r.GVR)
-}
-
-// IsReady returns whether the selected resource is in a terminal state.
-// (Ready or Succeeded Condition Type with a Status of True.)
-func (r *ReadyChecker) IsReady() bool {
-	untyped, err := r.Lister.ByNamespace(r.Namespace).Get(r.Name)
-	if err != nil {
-		fmt.Printf("Failed to fetch %s\n", r)
-		return false
-	}
-	obj, ok := untyped.(*v1alpha1.KResource)
-	if !ok {
-		fmt.Printf("Could not find `status.Conditions` for %s\n", r)
-		return false
-	}
-	for _, n := range []v1alpha1.ConditionType{v1alpha1.ConditionSucceeded, v1alpha1.ConditionReady} {
-		c := obj.Status.GetCondition(n)
-		if c == nil {
-			continue
-		}
-		if c.IsUnknown() {
-			fmt.Printf("%s has not finished yet\n", r)
-			continue
-		}
-		fmt.Printf("%s is %s: %t\n", r, n, c.IsTrue())
-		return c.IsTrue()
-	}
-	fmt.Printf("Could not find terminal condition on %s\n", r)
-	return false
 }
 
 // ParseGVRAndName parses a string like "Deployments.extensions:foo" or
