@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/evankanderson/kawait/internal/readychecker"
+	"github.com/evankanderson/kawait/internal/yaml"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -32,6 +33,15 @@ var cmd = &cobra.Command{
 
 		tif, mapper := connectToServer()
 
+		if len(args) == 0 {
+			objs, err := yaml.GetConfigs(".", ".yaml")
+			if err != nil {
+				fmt.Printf("Error finding yaml files: +%v\n", err)
+			}
+			fmt.Printf("Got objects: %+v\n", objs)
+			return
+		}
+
 		for _, item := range args {
 			gvr, ns, name, err := ParseGVRAndName(item, mapper)
 			if err != nil {
@@ -39,6 +49,10 @@ var cmd = &cobra.Command{
 				continue
 			}
 			_, lister, err := tif.Get(gvr)
+			if err != nil {
+				fmt.Printf("Error fetching lister for %s: %+v\n", item, err)
+				continue
+			}
 			rc := &readychecker.ReadyChecker{
 				GVR:       gvr,
 				Namespace: ns,
